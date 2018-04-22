@@ -38,6 +38,7 @@ def parse_espn(file):
         brackets.update(obj)
     return brackets
 
+
 filename_stub = 'espn_brackets_'
 filenames = [filename_stub+str(i)+'.json' for i in range(14)]
 
