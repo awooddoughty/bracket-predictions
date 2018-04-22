@@ -46,9 +46,9 @@ def parallel_predictions(num_brackets):
 
 
 if __name__ == '__main__':
-    bracket_dict = sequential_predictions(10)
-    # bracket_dict = parallel_predictions(1000000)
+    # bracket_dict = sequential_predictions(10)
+    bracket_dict = parallel_predictions(10)
 
-    print bracket_dict
-    # with open('brackets_2018.json', 'w') as fp:
-    #     json.dump(bracket_dict, fp, sort_keys=True, indent=4, cls=JSONEncoder)
+    # print bracket_dict
+    with open('brackets_test.json', 'w') as fp:
+        json.dump(bracket_dict, fp, sort_keys=True, indent=4, cls=JSONEncoder)

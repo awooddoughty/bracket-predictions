@@ -1,7 +1,10 @@
+import os
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
 import timeit
+import ijson.backends.yajl2_cffi as ijson
+from ijson.common import ObjectBuilder
 import json
 
 def import_data(simple_filename):
@@ -64,10 +67,11 @@ def get_teams(top_team, gap, bracket, rounds, round, data):
     return pyths
 
 
-def create_bracket(initial_bracket, data, subtime_start, sim):
+def create_bracket(initial_bracket, data, start_time, sim):
+    np.random.seed(sim)
     if sim % 10 == 0:
-        subtime_stop = timeit.default_timer()
-        print sim, ' ', subtime_stop-subtime_start
+        stop_time = timeit.default_timer()
+        print sim, ' ', stop_time-start_time
     bracket = initial_bracket.copy()
     rounds = ['64', '32', '16', '8', '4', '2', '1']
     probs = []
@@ -86,6 +90,82 @@ def create_bracket(initial_bracket, data, subtime_start, sim):
 
     # bracket_dict[filename]=bracket
     return filename, bracket, full_prob
+
+
+def bracket_objects(file):
+    key = '-'
+    # for prefix, event, value in islice(ijson.parse(file), 10000):
+    for prefix, event, value in ijson.parse(file):
+        if prefix == '' and event == 'map_key':  # found new object at the root
+            key = value  # mark the key value
+            builder = ObjectBuilder()
+        elif prefix.startswith(key):  # while at this key, build the object
+            # if value == 'p' or value == 'pct':
+            builder.event(event, value)
+            if event == 'end_array':  # found the end of an object at the current key, yield
+                # value_dict = builder.value
+                # builder.value = {key: value_dict[key] for key in ['p', 'pct']}
+                yield {key: builder.value}
+
+
+def score_bracket(merged):
+    total_score = 0
+    potential_score = 0
+    num_correct = []
+    for index, round in enumerate(['32', '16', '8', '4', '2', '1']):
+        round_num = str(index + 2)
+        binary_round = merged[round] != ''
+        results_round = merged['rd' + round_num + '_win'] == 1
+        potential_round = merged['rd' + round_num + '_win'] > 0
+        score_vec = binary_round & results_round
+        potential_vec = binary_round & potential_round
+        pts_per_correct = 10 * (2 ** index)  # ESPN scoring
+        score = score_vec.sum() * pts_per_correct
+        pot_score = potential_vec.sum() * pts_per_correct
+        total_score += score
+        potential_score += pot_score
+        num_correct.append(score_vec.sum())
+    return total_score, potential_score, num_correct
+
+
+def check_umbc(bracket):
+    umbc = 0
+    if bracket.loc[1, '32'] != "":
+        umbc = 1
+    return umbc
+
+
+def num_16_seeds(merged):
+    merged['seed'] = merged['team_seed'].apply(lambda x: int(filter(str.isdigit, x)))
+    binary_round = merged['32']!=''
+    seed_round = merged['seed']==16
+    score_vec = binary_round & seed_round
+    total_16 = score_vec.sum()
+    return total_16
+
+
+def check_longest_16(merged):
+    longest_16 = 0
+    for index, round in enumerate(['32', '16', '8', '4', '2', '1']):
+        binary_round = merged[round]!=''
+        seed_round = merged['seed']==16
+        score_vec = binary_round & seed_round
+        pts_per_correct = 10*(2**index)      #ESPN scoring
+        score = score_vec.sum() * pts_per_correct
+        longest_16 += score
+    return longest_16
+
+
+def save_brackets(filename, folder, bracket_names):
+    directory = os.path.dirname('Brackets_2018/' + folder + '/' + 'test')
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    for obj in bracket_objects(open(filename)):
+        bracket_name = obj.keys()[0]
+        if bracket_name in bracket_names:
+            bracket = pd.read_json(obj.values()[0][0])
+            bracket = bracket[['32', '16', '8', '4', '2', '1']]
+            bracket.to_html('Brackets_2018/' + folder + '/' + bracket_name + '.html', border=0)
 
 
 class JSONEncoder(json.JSONEncoder):
