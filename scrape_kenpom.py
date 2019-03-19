@@ -1,10 +1,10 @@
-__author__ = 'Alex'
-
 from bs4 import BeautifulSoup
 import requests
 import pandas as pd
 import numpy as np
 import re
+
+EXPORT_FILENAME = 'kenpom.csv'
 
 url = 'http://kenpom.com/index.php'
 
@@ -24,37 +24,46 @@ for x in thead:
     table = str(table).replace(str(x), '')
 
 #    table = "<table id='ratings-table'>%s</table>" % table
-df = pd.read_html(table, converters={3:lambda x: str(x)})[0]
+df = pd.read_html(table, converters={3: lambda x: str(x)})[0]
 
 df.columns = ['Rank', 'Team', 'Conference', 'W-L', 'AdjustEM',
-             'AdjustO', 'AdjustO Rank', 'AdjustD', 'AdjustD Rank',
-             'AdjustT', 'AdjustT Rank', 'Luck', 'Luck Rank',
-             'SOS Pyth', 'SOS Pyth Rank', 'SOS OppO', 'SOS OppO Rank',
-             'SOS OppD', 'SOS OppD Rank', 'NCSOS Pyth', 'NCSOS Pyth Rank']
+              'AdjustO', 'AdjustO Rank', 'AdjustD', 'AdjustD Rank',
+              'AdjustT', 'AdjustT Rank', 'Luck', 'Luck Rank',
+              'SOS Pyth', 'SOS Pyth Rank', 'SOS OppO', 'SOS OppO Rank',
+              'SOS OppD', 'SOS OppD Rank', 'NCSOS Pyth', 'NCSOS Pyth Rank']
 
-# Lambda that returns true if given string is a number and a valid seed number (1-16)
-valid_seed = lambda x: True if str(x).replace(' ', '').isdigit() \
-                and int(x) > 0 and int(x) <= 16 else False
 
-# Use lambda to parse out seed/team
-df['Seed'] = df['Team'].apply(lambda x: x[-2:].replace(' ', '') \
-                              if valid_seed(x[-2:]) else np.nan )
+# Returns true if given string is a number and a valid seed number (1-16)
+def is_valid_seed(x):
+    return str(x).replace(' ', '').isdigit() and int(x) > 0 and int(x) <= 16
 
-df['Team'] = df['Team'].apply(lambda x: x[:-2] if valid_seed(x[-2:]) else x)
+
+def parse_name(row):
+    if is_valid_seed(row['Team'][-2:]):
+        row['Seed'] = row['Team'][-2:].strip()
+        row['Team'] = row['Team'][:-2].strip()
+    else:
+        row['Seed'] = np.NaN
+        row['Team'] = row['Team']
+    return row
+
+
+# Parse out seed/team
+df = df.apply(parse_name, axis=1)
 
 # Split W-L column into wins and losses
-df['Wins'] = df['W-L'].apply(lambda x: int(re.sub('-.*', '', x)) )
-df['Losses'] = df['W-L'].apply(lambda x: int(re.sub('.*-', '', x)) )
+df['Wins'] = df['W-L'].apply(lambda x: int(re.sub('-.*', '', x)))
+df['Losses'] = df['W-L'].apply(lambda x: int(re.sub('.*-', '', x)))
 df.drop('W-L', inplace=True, axis=1)
 
 # Reorder columns just cause I'm OCD
-df=df[[ 'Rank', 'Seed', 'Team', 'Conference', 'Wins', 'Losses', 'AdjustEM',
-             'AdjustO', 'AdjustO Rank', 'AdjustD', 'AdjustD Rank',
-             'AdjustT', 'AdjustT Rank', 'Luck', 'Luck Rank',
-             'SOS Pyth', 'SOS Pyth Rank', 'SOS OppO', 'SOS OppO Rank',
-             'SOS OppD', 'SOS OppD Rank', 'NCSOS Pyth', 'NCSOS Pyth Rank']]
+df = df[['Rank', 'Seed', 'Team', 'Conference', 'Wins', 'Losses', 'AdjustEM',
+         'AdjustO', 'AdjustO Rank', 'AdjustD', 'AdjustD Rank',
+         'AdjustT', 'AdjustT Rank', 'Luck', 'Luck Rank',
+         'SOS Pyth', 'SOS Pyth Rank', 'SOS OppO', 'SOS OppO Rank',
+         'SOS OppD', 'SOS OppD Rank', 'NCSOS Pyth', 'NCSOS Pyth Rank']]
 
 # Drop non tournament teams
 df = df.dropna()
 
-df.to_csv('kenpom.csv', index=False)
+df.to_csv(EXPORT_FILENAME, index=False)
