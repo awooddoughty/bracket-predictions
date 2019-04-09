@@ -11,7 +11,7 @@ ESPN_FILE = ('https://projects.fivethirtyeight.com/'
              'march-madness-api/2019/fivethirtyeight_ncaa_forecasts.csv')
 EXPORT_FILENAME = 'simple_2018.csv'
 FIRST_FOUR_LOSERS = [
-    'Arizona State',
+    "St. John's (NY)",
     'Temple',
     'North Carolina Central',
     'Prairie View',

@@ -6,6 +6,7 @@ import timeit
 import ijson.backends.yajl2_cffi as ijson
 from ijson.common import ObjectBuilder
 import json
+import re
 
 DIRECTORY_NAME = 'Brackets_2018'
 FILE_NAME = 'test'
@@ -15,7 +16,7 @@ def create_initial_bracket(simple_filename):
     """Convert team information into empty bracket."""
     simple = pd.read_csv(simple_filename)
 
-    order_of_regions = ['South', 'West', 'East', 'Midwest']  # This changes every year!
+    order_of_regions = ['East', 'West', 'South', 'Midwest']  # This changes every year!
     order_of_teams = [1, 16, 8, 9, 5, 12, 4, 13, 6, 11, 3, 14, 7, 10, 2, 15]
     index = pd.MultiIndex.from_product([order_of_regions, order_of_teams],
                                        names=['Region', 'Seed'])
@@ -71,9 +72,9 @@ def get_teams(top_team, gap, bracket, rounds, round, data):
 def create_bracket(initial_bracket, data, start_time, sim):
     """Fill out the bracket by iterating through each game."""
     np.random.seed(sim)
-    if sim % 10 == 0:
+    if sim % 10000 == 0:
         stop_time = timeit.default_timer()
-        print("{}: {}".format(sim, stop_time - start_time))
+        print("{}: {}".format(sim, np.round(stop_time - start_time, 2)))
 
     bracket = initial_bracket.copy()
     rounds = ['64', '32', '16', '8', '4', '2', '1']
@@ -119,7 +120,7 @@ def score_bracket(bracket):
 
 def num_16_seeds(merged):
     """How many 16 seeds won in the first round?"""
-    merged['seed'] = merged['team_seed'].apply(lambda x: int(filter(str.isdigit, x)))
+    merged['seed'] = merged['team_seed'].apply(lambda x: int(re.sub('\D', '', x)))
     binary_round = merged['32'] != ''
     seed_round = merged['seed'] == 16
     score_vec = binary_round & seed_round
@@ -157,17 +158,18 @@ def bracket_objects(file):
                 yield {key: builder.value}
 
 
-def save_brackets(filename, folder, bracket_names):
+def save_brackets(brackets_json, directory_name, folder, bracket_names):
     """Retrieve a set of named brackets and save them to html"""
-    directory = os.path.dirname("{}/{}/{}".format(DIRECTORY_NAME, folder))
+    directory = os.path.dirname("{}/{}/".format(directory_name, folder))
     if not os.path.exists(directory):
         os.makedirs(directory)
-    for obj in bracket_objects(open(filename)):
-        bracket_name = obj.keys()[0]
+    for obj in bracket_objects(open(brackets_json, 'rb')):
+        bracket_name = bracket_name = list(obj)[0]
         if bracket_name in bracket_names:
-            bracket = pd.read_json(obj.values()[0][0])
+            values = list(obj.values())
+            bracket = pd.read_json(values[0][0])
             bracket = bracket[['32', '16', '8', '4', '2', '1']]
-            bracket.to_html("{}/{}/{}.html".format(DIRECTORY_NAME, folder, bracket_name), border=0)
+            bracket.to_html("{}/{}/{}.html".format(directory_name, folder, bracket_name), border=0)
 
 
 class JSONEncoder(json.JSONEncoder):

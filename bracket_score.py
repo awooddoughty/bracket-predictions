@@ -25,14 +25,15 @@ FEATHER_FILE = 'brackets_test.feather'
 
 def compute_score(obj, results, start_time):
     """Read saved bracket, merge results, compute scores, save to dict."""
-    bracket_name = obj.keys()[0]
+    bracket_name = list(obj)[0]
     bracket_num = int(re.search('\d+', bracket_name).group(0))
-    if bracket_num % 100 == 0:
+    if bracket_num % 10000 == 0:
         stop_time = timeit.default_timer()
-        print bracket_num, ' ', stop_time - start_time
+        print("{}: {}".format(bracket_num, round(stop_time - start_time, 2)))
 
-    bracket = pd.read_json(obj.values()[0][0])
-    prob = float(obj.values()[0][1])
+    values = list(obj.values())
+    bracket = pd.read_json(values[0][0])
+    prob = float(values[0][1])
 
     merged = pd.merge(results, bracket, how='left', left_on='team_name', right_on='64')
 
@@ -47,7 +48,7 @@ def compute_score(obj, results, start_time):
     return {bracket_name: scores}
 
 
-def compute_all_scores(filename, feather_name):
+def compute_all_scores(results, filename, feather_name):
     """Parallel scoring of every bracket in json. Write to dataframe."""
     num_cores = 22
     pool = Pool(processes=num_cores)
@@ -55,13 +56,16 @@ def compute_all_scores(filename, feather_name):
     start = timeit.default_timer()
 
     partial_bracket = partial(compute_score, results=results, start_time=start)
-    scores = pool.map(partial_bracket, bracket_objects(open(filename)))
+    scores = pool.map(partial_bracket, bracket_objects(open(filename, 'rb')))
+    # scores = []
+    # for bracket in bracket_objects(open(filename, 'rb')):
+    #     scores.append(partial_bracket(bracket))
 
     # convert list of dicts to one big dict
-    scores_dict = reduce(lambda r, d: r.update(d) or r, scores, {})
+    scores_dict = {k: v for dct in scores for k, v in dct.items()}
 
     stop = timeit.default_timer()
-    print len(scores), ' ', stop - start
+    print("Completed {}: {}".format(len(scores), round(stop - start, 2)))
 
     columns = [
         "likelihood",
@@ -97,4 +101,4 @@ if __name__ == '__main__':
     results.loc[results['team_name'] == CHAMPIONSHIP_LOSER, 'rd7_win'] = 0
     results.loc[results['team_name'] == CHAMPIONSHIP_WINNER, 'rd7_win'] = 1
 
-    compute_all_scores(JSON_FILE, FEATHER_FILE)
+    compute_all_scores(results, JSON_FILE, FEATHER_FILE)
