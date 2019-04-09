@@ -1,19 +1,13 @@
-__author__ = 'Alex'
-
-import numpy as np
+import os
 import pandas as pd
 import timeit
-import json
 from multiprocessing import Pool
-from functools import partial
-import re
 import ijson.backends.yajl2_cffi as ijson
-# import ijson
-from itertools import islice
-import seaborn as sns
-import matplotlib.pyplot as plt
-import os
 from ijson.common import ObjectBuilder
+
+DIRECTORY = 'espn_brackets_2019/'
+OUTPUT_FILENAME = 'espn_brackets_2019.feather'
+NUM_CORES = 4
 
 
 def objects(file):
@@ -39,30 +33,24 @@ def parse_espn(file):
     return brackets
 
 
-filename_stub = 'espn_brackets_'
-filenames = [filename_stub+str(i)+'.json' for i in range(14)]
+if __name__ == '__main__':
+    start = timeit.default_timer()
 
-num_cores = 22
-pool = Pool(processes=num_cores)
+    filenames = os.listdir(DIRECTORY)
+    pool = Pool(processes=NUM_CORES)
 
-start = timeit.default_timer()
+    full_brackets = pool.map(parse_espn, filenames)
+    # full_brackets = []
+    # for filename in filenames[:3]:
+    #     full_brackets.append(parse_espn(filename))
 
-full_brackets = pool.map(parse_espn, filenames)
-# full_brackets = []
-# for filename in filenames[:3]:
-#     full_brackets.append(parse_espn(filename))
+    brackets = {k: v for dct in full_brackets for k, v in dct.items()}
 
+    brackets_df = pd.DataFrame.from_dict(brackets, orient='index')
 
-brackets = reduce(lambda r, d: r.update(d) or r, full_brackets, {})
+    brackets_df['pct'] = pd.to_numeric(brackets_df['pct'])
 
-brackets_df = pd.DataFrame.from_dict(brackets, orient='index')
+    brackets_df.reset_index().to_feather(OUTPUT_FILENAME)
 
-brackets_df['pct'] = pd.to_numeric(brackets_df['pct'])
-
-brackets_df.reset_index().to_feather('espn_brackets_2018.feather')
-
-stop = timeit.default_timer()
-print stop - start
-
-
-
+    stop = timeit.default_timer()
+    print("Full Time: {}".format(stop - start))
