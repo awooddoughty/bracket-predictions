@@ -12,15 +12,15 @@ from bracket_functions import (
 )
 
 ESPN_FILE = ('https://projects.fivethirtyeight.com/'
-             'march-madness-api/2018/fivethirtyeight_ncaa_forecasts.csv')
+             'march-madness-api/2019/fivethirtyeight_ncaa_forecasts.csv')
 
 # Update these!
 # 538 does not update after the championship game
-CHAMPIONSHIP_LOSER = 'Michigan'
-CHAMPIONSHIP_WINNER = 'Villanova'
+CHAMPIONSHIP_LOSER = 'Texas Tech'
+CHAMPIONSHIP_WINNER = 'Virginia'
 
-JSON_FILE = 'brackets_test.json'
-FEATHER_FILE = 'brackets_test.feather'
+JSON_FILE = 'brackets_2019.json'
+FEATHER_FILE = 'brackets_2019.feather'
 
 
 def compute_score(obj, results, start_time):

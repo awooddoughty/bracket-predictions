@@ -5,7 +5,7 @@ from functools import partial
 from bracket_functions import create_bracket, create_initial_bracket, JSONEncoder
 
 DATA_FILE_NAME = 'simple_2019.csv'
-EXPORT_JSON = 'brackets_test.json'
+EXPORT_JSON = 'brackets_2019.json'
 EXPORT_DIRECTORY = 'Brackets_test'
 
 
@@ -46,8 +46,8 @@ def parallel_predictions(num_brackets, initial_bracket, data):
 if __name__ == '__main__':
     initial_bracket, data = create_initial_bracket(DATA_FILE_NAME)
 
-    bracket_dict = sequential_predictions(10, initial_bracket, data)
-    # bracket_dict = parallel_predictions(10, initial_bracket, data)
+    # bracket_dict = sequential_predictions(10, initial_bracket, data)
+    bracket_dict = parallel_predictions(1000000, initial_bracket, data)
 
     with open(EXPORT_JSON, 'w') as fp:
         json.dump(bracket_dict, fp, sort_keys=True, indent=4, cls=JSONEncoder)
