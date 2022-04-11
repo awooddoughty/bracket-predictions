@@ -8,15 +8,11 @@ from ijson.common import ObjectBuilder
 import json
 import re
 
-DIRECTORY_NAME = 'Brackets_2018'
-FILE_NAME = 'test'
 
-
-def create_initial_bracket(simple_filename):
+def create_initial_bracket(simple_filename, order_of_regions):
     """Convert team information into empty bracket."""
     simple = pd.read_csv(simple_filename)
 
-    order_of_regions = ['East', 'West', 'South', 'Midwest']  # This changes every year!
     order_of_teams = [1, 16, 8, 9, 5, 12, 4, 13, 6, 11, 3, 14, 7, 10, 2, 15]
     index = pd.MultiIndex.from_product([order_of_regions, order_of_teams],
                                        names=['Region', 'Seed'])
@@ -35,41 +31,75 @@ def create_initial_bracket(simple_filename):
     return initial_bracket, data
 
 
-def compute_winner(pyths):
+# def compute_winner(pyths, sd_params, k):
+#     """Compute the win probability and flip coin to determine winner."""
+#     A_team_id = pyths[0][0]
+#     A_team_name = pyths[0][1]
+#     A_em = pyths[0][2]
+#     A_t = pyths[0][3]
+#     B_team_id = pyths[1][0]
+#     B_team_name = pyths[1][1]
+#     B_em = pyths[1][2]
+#     B_t = pyths[1][3]
+
+#     point_diff = (A_em - B_em) * (A_t + B_t) / 200
+
+#     d = norm(0, 11)
+#     prob = d.cdf(point_diff)
+
+#     flip = np.random.uniform()
+#     if flip < prob:
+#         return A_team_id, A_team_name, prob
+#     else:
+#         return B_team_id, B_team_name, 1 - prob
+    
+    
+def compute_winner(data, teams, sd_params, k, avg_tempo):
     """Compute the win probability and flip coin to determine winner."""
-    A_team_id = pyths[0][0]
-    A_team_name = pyths[0][1]
-    A_em = pyths[0][2]
-    A_t = pyths[0][3]
-    B_team_id = pyths[1][0]
-    B_team_name = pyths[1][1]
-    B_em = pyths[1][2]
-    B_t = pyths[1][3]
+    A_team_id, B_team_id = teams
+    A_team_name = data.loc[A_team_id, '64']
+    A_em = data.loc[A_team_id, 'AdjustEM']
+    A_t = data.loc[A_team_id, 'AdjustT']
+    B_team_name = data.loc[B_team_id, '64']
+    B_em = data.loc[B_team_id, 'AdjustEM']
+    B_t = data.loc[B_team_id, 'AdjustT']
 
     point_diff = (A_em - B_em) * (A_t + B_t) / 200
+    
+    sd = sd_params[0] + sd_params[1] * (((A_t + B_t) / 2) - avg_tempo) / avg_tempo
 
-    d = norm(0, 11)
+    d = norm(0, sd)
     prob = d.cdf(point_diff)
 
     flip = np.random.uniform()
     if flip < prob:
+        data.loc[A_team_id, 'AdjustEM'] = A_em + (k * (1 - prob))
         return A_team_id, A_team_name, prob
     else:
+        data.loc[B_team_id, 'AdjustEM'] = B_em + (k * (1 - prob))
         return B_team_id, B_team_name, 1 - prob
+    
 
 
-def get_teams(top_team, gap, bracket, rounds, round, data):
-    """Parse the bracket to get the teams that are playing each other."""
-    pyths = []
-    for team in range(top_team, top_team + gap):
-        team_name = bracket.loc[team, rounds[round]]
-        if team_name != "":
-            team_loc = data.iloc[team]
-            pyths.append([team, team_name, team_loc['AdjustEM'], team_loc['AdjustT']])
-    return pyths
+# def get_teams(top_team, gap, bracket, rounds, round_, data):
+#     """Parse the bracket to get the teams that are playing each other."""
+#     pyths = []
+#     for team in range(top_team, top_team + gap):
+#         team_name = bracket.loc[team, rounds[round_]]
+#         if team_name != "":
+#             team_loc = data.iloc[team]
+#             pyths.append([team, team_name, team_loc['AdjustEM'], team_loc['AdjustT']])
+#     return pyths
 
 
-def create_bracket(initial_bracket, data, start_time, sim):
+def get_teams(top_team, gap, bracket, rounds, round_, data):
+    return [
+        team
+        for team in range(top_team, top_team + gap) if bracket.loc[team, rounds[round_]] != ""
+    ]
+
+
+def create_bracket(initial_bracket, data, sd_params, k, start_time, sim):
     """Fill out the bracket by iterating through each game."""
     np.random.seed(sim)
     if sim % 10000 == 0:
@@ -77,15 +107,17 @@ def create_bracket(initial_bracket, data, start_time, sim):
         print("{}: {}".format(sim, np.round(stop_time - start_time, 2)))
 
     bracket = initial_bracket.copy()
+    data = data.copy()
+    avg_tempo = data["AdjustT"].mean()
     rounds = ['64', '32', '16', '8', '4', '2', '1']
     probs = []
-    for round in range(6):
-        gap = 2**(round + 1)  # how far apart two teams could be for a given round
+    for round_ in range(6):
+        gap = 2**(round_ + 1)  # how far apart two teams could be for a given round
         for top_team in range(0, len(bracket), gap):
-            pyths = get_teams(top_team, gap, bracket, rounds, round, data)
-            winner_num, winner_name, prob = compute_winner(pyths)
+            teams = get_teams(top_team, gap, bracket, rounds, round_, data)
+            winner_num, winner_name, prob = compute_winner(data, teams, sd_params, k, avg_tempo)
             probs.append(prob)
-            bracket.loc[winner_num, rounds[round + 1]] = winner_name  # write in the winner
+            bracket.loc[winner_num, rounds[round_ + 1]] = winner_name  # write in the winner
 
     full_prob = np.prod(probs)  # compute the likelihood of the entire bracket
     filename = "bracket{}".format(sim)
