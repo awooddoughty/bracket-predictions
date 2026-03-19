@@ -53,6 +53,12 @@ def compute_winner(data, teams, sd_params, k, avg_tempo, score_method):
 #         c = 30.464  # pre-2025
         c = 1
         prob = 1 / (1 + 10**(-1 * diff * c / 400))
+    elif score_method == "torvik":
+        A_pyth = data.loc[A_team_id, 'pyth']
+        B_pyth = data.loc[B_team_id, 'pyth']
+        prob = (A_pyth - A_pyth * B_pyth) / (
+            A_pyth + B_pyth - (2 * A_pyth * B_pyth)
+        )
     else:
         raise Exception("Invalid score_method")
 

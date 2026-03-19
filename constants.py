@@ -1,4 +1,4 @@
-YEAR = 2025
+YEAR = 2026
 
 # 2021 and 2022
 # ORDER_OF_REGIONS = ['West', 'East', 'South', 'Midwest']  # This changes every year!
@@ -12,21 +12,45 @@ YEAR = 2025
 #     "mens": ['East', 'West', 'South', 'Midwest'],
 #     "womens": ["Albany 1", "Portland 4", "Albany 2", "Portland 3"]
 # }
-# 2025
+# # 2025
+# ORDER_OF_REGIONS = {  # This changes every year!
+#     "mens": ['South', 'West', 'East', 'Midwest'],
+#     "womens": ["Spokane 1", "Spokane 4", "Birmingham 2", "Birmingham 3"]
+# }
+# 2026
 ORDER_OF_REGIONS = {  # This changes every year!
-    "mens": ['South', 'West', 'East', 'Midwest'],
-    "womens": ["Spokane 1", "Spokane 4", "Birmingham 2", "Birmingham 3"]
+    "mens": ['East', 'South', 'West', 'Midwest'],
+    "womens": ["Regional 1", "Regional 4", "Regional 2", "Regional 3"]
 }
 
 
+ESPN_IDS = {
+    2025: {
+        "mens": 257,
+        "womens": 258,
+    },
+    2026: {
+        "mens": 277,
+        "womens": 278,
+    },
+}
+
+
+# DATA_DIRECTORY = (
+#     f"/Volumes/3TB/bracket-data/{YEAR}/"
+#     "{gender}"
+# )
 DATA_DIRECTORY = (
-    f"/Volumes/3TB/bracket-data/{YEAR}/"
+    f"/Users/awooddoughty/Library/Mobile Documents/com~apple~CloudDocs/bracket_simple/{YEAR}/"
     "{gender}"
 )
 
 INITIAL_FILE = f'{DATA_DIRECTORY}/initial_{YEAR}.xlsx'
 SILVER_FILE = f'{DATA_DIRECTORY}/silver_{YEAR}.xlsx'
+
+INITIAL_FILE_NEW = f'{DATA_DIRECTORY}/initial_{YEAR}.csv'
 KENPOM_FILE = f'{DATA_DIRECTORY}/kenpom_{YEAR}.csv'
+TORVIK_FILE = f'{DATA_DIRECTORY}/torvik_{YEAR}.csv'
 ESPN_FILE = (
     'https://projects.fivethirtyeight.com/'
     f'march-madness-api/{YEAR}/fivethirtyeight_ncaa_forecasts.csv'
