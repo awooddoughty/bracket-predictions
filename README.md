@@ -1,8 +1,11 @@
 # bracket-predictions
 
 ## Initial Setup
-`scrape_kenpom.ipynb` to get the Kenpom ratings  
-`create_original_bracket.ipynb` to generate the base bracket
+Update the year in constants!!
+Create directories
+Subscribe to Silver Bulletin and download xlsx files. Rename to `initial` and `silver`
+`scrape_kenpom.ipynb` to get the Kenpom ratings  and add to simple
+`create_original_brackets.ipynb` to generate the base brackets and Silver predictions
 
 ## Generate Brackets
 `generate_predictions.ipynb` to create brackets and save to json

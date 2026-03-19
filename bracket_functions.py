@@ -29,67 +29,42 @@ def create_initial_bracket(simple_filename, order_of_regions):
     data = simple.set_index('team_name').reindex(initial_bracket['64']).reset_index()
 
     return initial_bracket, data
-
-
-# def compute_winner(pyths, sd_params, k):
-#     """Compute the win probability and flip coin to determine winner."""
-#     A_team_id = pyths[0][0]
-#     A_team_name = pyths[0][1]
-#     A_em = pyths[0][2]
-#     A_t = pyths[0][3]
-#     B_team_id = pyths[1][0]
-#     B_team_name = pyths[1][1]
-#     B_em = pyths[1][2]
-#     B_t = pyths[1][3]
-
-#     point_diff = (A_em - B_em) * (A_t + B_t) / 200
-
-#     d = norm(0, 11)
-#     prob = d.cdf(point_diff)
-
-#     flip = np.random.uniform()
-#     if flip < prob:
-#         return A_team_id, A_team_name, prob
-#     else:
-#         return B_team_id, B_team_name, 1 - prob
     
     
-def compute_winner(data, teams, sd_params, k, avg_tempo):
+def compute_winner(data, teams, sd_params, k, avg_tempo, score_method):
     """Compute the win probability and flip coin to determine winner."""
     A_team_id, B_team_id = teams
     A_team_name = data.loc[A_team_id, '64']
-    A_em = data.loc[A_team_id, 'AdjustEM']
-    A_t = data.loc[A_team_id, 'AdjustT']
     B_team_name = data.loc[B_team_id, '64']
-    B_em = data.loc[B_team_id, 'AdjustEM']
-    B_t = data.loc[B_team_id, 'AdjustT']
-
-    point_diff = (A_em - B_em) * (A_t + B_t) / 200
     
-    sd = sd_params[0] + sd_params[1] * (((A_t + B_t) / 2) - avg_tempo) / avg_tempo
-
-    d = norm(0, sd)
-    prob = d.cdf(point_diff)
+    if score_method == "kenpom":
+        A_em = data.loc[A_team_id, 'AdjustEM']
+        A_t = data.loc[A_team_id, 'AdjustT']
+        B_em = data.loc[B_team_id, 'AdjustEM']
+        B_t = data.loc[B_team_id, 'AdjustT']
+        sd = sd_params[0] + sd_params[1] * (((A_t + B_t) / 2) - avg_tempo) / avg_tempo
+        d = norm(0, sd)
+        diff = (A_em - B_em) * (A_t + B_t) / 200
+        prob = d.cdf(diff)
+    elif score_method == "538":
+        A_538 = data.loc[A_team_id, 'team_rating']
+        B_538 = data.loc[B_team_id, 'team_rating']
+        diff = A_538 - B_538
+#         c = 30.464  # pre-2025
+        c = 1
+        prob = 1 / (1 + 10**(-1 * diff * c / 400))
+    else:
+        raise Exception("Invalid score_method")
 
     flip = np.random.uniform()
     if flip < prob:
-        data.loc[A_team_id, 'AdjustEM'] = A_em + (k * (1 - prob))
+        if score_method == "kenpom":
+            data.loc[A_team_id, 'AdjustEM'] = A_em + (k * (1 - prob))
         return A_team_id, A_team_name, prob
     else:
-        data.loc[B_team_id, 'AdjustEM'] = B_em + (k * (1 - prob))
+        if score_method == "kenpom":
+            data.loc[B_team_id, 'AdjustEM'] = B_em + (k * (1 - prob))
         return B_team_id, B_team_name, 1 - prob
-    
-
-
-# def get_teams(top_team, gap, bracket, rounds, round_, data):
-#     """Parse the bracket to get the teams that are playing each other."""
-#     pyths = []
-#     for team in range(top_team, top_team + gap):
-#         team_name = bracket.loc[team, rounds[round_]]
-#         if team_name != "":
-#             team_loc = data.iloc[team]
-#             pyths.append([team, team_name, team_loc['AdjustEM'], team_loc['AdjustT']])
-#     return pyths
 
 
 def get_teams(top_team, gap, bracket, rounds, round_, data):
@@ -99,23 +74,20 @@ def get_teams(top_team, gap, bracket, rounds, round_, data):
     ]
 
 
-def create_bracket(initial_bracket, data, sd_params, k, start_time, sim):
+def create_bracket(initial_bracket, data, sd_params, k, score_method, sim):
     """Fill out the bracket by iterating through each game."""
     np.random.seed(sim)
-    if sim % 10000 == 0:
-        stop_time = timeit.default_timer()
-        print("{}: {}".format(sim, np.round(stop_time - start_time, 2)))
 
     bracket = initial_bracket.copy()
     data = data.copy()
-    avg_tempo = data["AdjustT"].mean()
+    avg_tempo = data.get("AdjustT", np.array([np.nan])).mean()
     rounds = ['64', '32', '16', '8', '4', '2', '1']
     probs = []
     for round_ in range(6):
         gap = 2**(round_ + 1)  # how far apart two teams could be for a given round
         for top_team in range(0, len(bracket), gap):
             teams = get_teams(top_team, gap, bracket, rounds, round_, data)
-            winner_num, winner_name, prob = compute_winner(data, teams, sd_params, k, avg_tempo)
+            winner_num, winner_name, prob = compute_winner(data, teams, sd_params, k, avg_tempo, score_method)
             probs.append(prob)
             bracket.loc[winner_num, rounds[round_ + 1]] = winner_name  # write in the winner
 
@@ -125,20 +97,19 @@ def create_bracket(initial_bracket, data, sd_params, k, start_time, sim):
     return filename, bracket, full_prob
 
 
-def score_bracket(bracket):
+def score_bracket(bracket, binary_bracket):
     """Compute actual and potential score for a given bracket."""
     total_score = 0
     potential_score = 0
     num_correct = []
-    for index, round in enumerate(['32', '16', '8', '4', '2', '1']):
+    for index, round_ in enumerate(['32', '16', '8', '4', '2', '1']):
         round_num = str(index + 2)
 
-        binary_round = bracket[round] != ''  # Who we predicted to win
         results_round = bracket['rd' + round_num + '_win'] == 1  # Who actually won
         potential_round = bracket['rd' + round_num + '_win'] > 0  # Who hasn't played yet
 
-        score_vec = binary_round & results_round  # How many did we get right
-        potential_vec = binary_round & potential_round  # How many could we still get right
+        score_vec = binary_bracket[round_] & results_round  # How many did we get right
+        potential_vec = binary_bracket[round_] & potential_round  # How many could we still get right
 
         pts_per_correct = 10 * (2 ** index)  # ESPN scoring
         score_round = score_vec.sum() * pts_per_correct  # How many points did we get
@@ -150,27 +121,9 @@ def score_bracket(bracket):
     return total_score, potential_score, num_correct
 
 
-def num_16_seeds(merged):
-    """How many 16 seeds won in the first round?"""
-    merged['seed'] = merged['team_seed'].apply(lambda x: int(re.sub('\D', '', x)))
-    binary_round = merged['32'] != ''
-    seed_round = merged['seed'] == 16
-    score_vec = binary_round & seed_round
-    total_16 = score_vec.sum()
-    return total_16
-
-
-def check_longest_16(merged):
-    """How far did a 16 seed go?"""
-    longest_16 = 0
-    for index, round in enumerate(['32', '16', '8', '4', '2', '1']):
-        binary_round = merged[round] != ''
-        seed_round = merged['seed'] == 16
-        score_vec = binary_round & seed_round
-        pts_per_correct = 10 * (2**index)  # ESPN scoring
-        score = score_vec.sum() * pts_per_correct
-        longest_16 += score
-    return longest_16
+def num_specific_seed_in_specific_round(binary_bracket, seed_bracket, seed_num, round_num):
+    """e.g. How many 16 seeds made it to the round of 32?"""
+    return (binary_bracket[round_num] & seed_bracket[seed_num]).sum()
 
 
 def bracket_objects(file):
