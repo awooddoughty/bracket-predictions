@@ -36,14 +36,14 @@ ESPN_IDS = {
 }
 
 
-DATA_DIRECTORY = (
-    f"/Volumes/3TB/bracket-data/{YEAR}/"
-    "{gender}"
-)
 # DATA_DIRECTORY = (
-#     f"/Users/awooddoughty/Library/Mobile Documents/com~apple~CloudDocs/bracket_simple/{YEAR}/"
+#     f"/Volumes/3TB/bracket-data/{YEAR}/"
 #     "{gender}"
 # )
+DATA_DIRECTORY = (
+    f"/Users/awooddoughty/Library/Mobile Documents/com~apple~CloudDocs/bracket_simple/{YEAR}/"
+    "{gender}"
+)
 
 INITIAL_FILE = f'{DATA_DIRECTORY}/initial_{YEAR}.xlsx'
 SILVER_FILE = f'{DATA_DIRECTORY}/silver_{YEAR}.xlsx'
@@ -57,8 +57,35 @@ ESPN_FILE = (
 )
 DATA_FILENAME = f'{DATA_DIRECTORY}/simple_{YEAR}.csv'
 
+# Name mappings where fuzzy matching consistently fails.
+# Keys are names as they appear in the ratings file (KenPom/Torvik).
+# Values are names as they appear in the ESPN bracket.
+# Add entries here when unmatched teams are printed during bracket creation.
+NAME_OVERRIDES = {
+    "mens": {
+        'Connecticut':       'UConn',           # KenPom full name vs ESPN abbreviation
+        'Ohio St.':          'Ohio State',       # KenPom abbreviates, ESPN does not
+        'Iowa St.':          'Iowa State',
+        'N.C. State':        'North Carolina State',
+        'North Dakota St.':  'N Dakota St',
+        'LIU':               'Long Island',
+        'Utah St.': 'Utah State',
+    },
+    "womens": {
+        'Connecticut':       'UConn',
+        'Ohio St.':          'Ohio State',
+        'Iowa St.':          'Iowa State',
+        'Mississippi':       'Ole Miss',
+        'Fairleigh Dickinson': 'FDU',
+        'Western Illinois': 'W Illinois',
+        'South Dakota St.': 'S Dakota St',
+    },
+}
+
 BRACKETS_JSON = f'{DATA_DIRECTORY}/brackets_{YEAR}.json'
+BRACKETS_NPZ = f'{DATA_DIRECTORY}/brackets_{YEAR}.npz'
 BRACKETS_DIRECTORY = f'{DATA_DIRECTORY}/Brackets_{YEAR}'
+BRACKETS_PARQUET = f'{DATA_DIRECTORY}/brackets_{YEAR}.parquet'
 BRACKETS_FEATHER = f'{DATA_DIRECTORY}/brackets_{YEAR}.feather'
 
 ESPN_GROUP_FILE = f'{DATA_DIRECTORY}/groups_{YEAR}.pkl'

@@ -4,6 +4,56 @@ import requests
 ESPN_FILE = "https://gambit-api.fantasy.espn.com/apis/v1/propositions/?challengeId={ID}&platform=chui&view=chui_default"
 
 
+def match_team_names(ratings_df, espn_names, overrides=None, name_col='Team', threshold=85):
+    """Match team names from a ratings source (KenPom/Torvik) to ESPN team names.
+
+    Parameters
+    ----------
+    ratings_df  : DataFrame containing a column of team names
+    espn_names  : list of ESPN team name strings to match against
+    overrides   : dict {ratings_name: espn_name} for known problem pairs that
+                  fuzzy matching consistently gets wrong.  Add entries to
+                  NAME_OVERRIDES in constants.py and re-run when unmatched
+                  teams are printed below.
+    name_col    : column in ratings_df containing team names (default 'Team')
+    threshold   : minimum fuzzy score to auto-accept a match (default 85)
+
+    Returns
+    -------
+    mapping           : dict {ratings_name: espn_name} for all matched teams
+    unmatched_ratings : list of ratings names with no ESPN match found
+    unmatched_espn    : list of ESPN names that were not claimed by any rating
+    """
+    from fuzzywuzzy import process
+
+    remaining_espn = list(espn_names)
+    mapping = {}
+
+    # Apply known overrides first so they can't be stolen by fuzzy matching
+    for r_name, espn_name in (overrides or {}).items():
+        if espn_name in remaining_espn:
+            mapping[r_name] = espn_name
+            remaining_espn.remove(espn_name)
+
+    # Score all remaining pairs, then greedily assign best matches first
+    # (sorting by score prevents a weak early match from claiming a name
+    # that a stronger later match needs)
+    unmatched = [name for name in ratings_df[name_col] if name not in mapping]
+    candidates = [
+        (score, r_name, espn_name)
+        for r_name in unmatched
+        for espn_name, score in [process.extractOne(r_name, remaining_espn)]
+        if remaining_espn
+    ]
+    for score, r_name, espn_name in sorted(candidates, reverse=True):
+        if score >= threshold and espn_name in remaining_espn:
+            mapping[r_name] = espn_name
+            remaining_espn.remove(espn_name)
+
+    unmatched_ratings = [name for name in ratings_df[name_col] if name not in mapping]
+    return mapping, unmatched_ratings, remaining_espn
+
+
 def scrape_espn_data(id_):
     return requests.get(ESPN_FILE.format(ID=id_)).json()
 
