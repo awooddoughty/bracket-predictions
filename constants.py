@@ -36,14 +36,14 @@ ESPN_IDS = {
 }
 
 
-# DATA_DIRECTORY = (
-#     f"/Volumes/3TB/bracket-data/{YEAR}/"
-#     "{gender}"
-# )
 DATA_DIRECTORY = (
-    f"/Users/awooddoughty/Library/Mobile Documents/com~apple~CloudDocs/bracket_simple/{YEAR}/"
+    f"/Volumes/3TB/bracket-data/{YEAR}/"
     "{gender}"
 )
+# DATA_DIRECTORY = (
+#     f"/Users/awooddoughty/Library/Mobile Documents/com~apple~CloudDocs/bracket_simple/{YEAR}/"
+#     "{gender}"
+# )
 
 INITIAL_FILE = f'{DATA_DIRECTORY}/initial_{YEAR}.xlsx'
 SILVER_FILE = f'{DATA_DIRECTORY}/silver_{YEAR}.xlsx'

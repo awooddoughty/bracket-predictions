@@ -64,11 +64,11 @@ def compute_winner(data, teams, sd_params, k, avg_tempo, score_method):
 
     flip = np.random.uniform()
     if flip < prob:
-        if score_method == "kenpom":
+        if (score_method == "kenpom") and (k != 0):
             data.loc[A_team_id, 'AdjustEM'] = A_em + (k * (1 - prob))
         return A_team_id, A_team_name, prob
     else:
-        if score_method == "kenpom":
+        if (score_method == "kenpom") and (k != 0):
             data.loc[B_team_id, 'AdjustEM'] = B_em + (k * (1 - prob))
         return B_team_id, B_team_name, 1 - prob
 
