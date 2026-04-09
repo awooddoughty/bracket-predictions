@@ -54,6 +54,130 @@ def match_team_names(ratings_df, espn_names, overrides=None, name_col='Team', th
     return mapping, unmatched_ratings, remaining_espn
 
 
+def scrape_kenpom(year):
+    """Scrape tournament teams from kenpom.com using a headless Firefox browser.
+
+    Requires selenium, beautifulsoup4, and lxml plus geckodriver:
+        pip install selenium beautifulsoup4 lxml
+        brew install geckodriver
+
+    Parameters
+    ----------
+    year : int  (currently must match the live KenPom season — no archive support)
+
+    Returns
+    -------
+    DataFrame with columns: Seed (int), Team (str), AdjustEM (float), AdjustT (float)
+    """
+    try:
+        from selenium import webdriver
+        from bs4 import BeautifulSoup
+    except ImportError as e:
+        raise ImportError(
+            "KenPom scraping requires selenium and beautifulsoup4. "
+            "pip install selenium beautifulsoup4 lxml  &&  brew install geckodriver"
+        ) from e
+
+    COLUMNS = [
+        'Rank', 'Team', 'Conference', 'W-L', 'AdjustEM',
+        'AdjustO', 'AdjustO Rank', 'AdjustD', 'AdjustD Rank',
+        'AdjustT', 'AdjustT Rank', 'Luck', 'Luck Rank',
+        'SOS Pyth', 'SOS Pyth Rank', 'SOS OppO', 'SOS OppO Rank',
+        'SOS OppD', 'SOS OppD Rank', 'NCSOS Pyth', 'NCSOS Pyth Rank',
+    ]
+
+    opts = webdriver.FirefoxOptions()
+    opts.add_argument('--headless')
+    browser = webdriver.Firefox(options=opts)
+    try:
+        browser.get('http://kenpom.com/index.php')
+        soup = BeautifulSoup(browser.page_source, 'lxml')
+    finally:
+        browser.quit()
+
+    df = pd.DataFrame(
+        [
+            [td.text for td in row.find_all('td')]
+            for row in soup.find('table', {'id': 'ratings-table'}).find_all(class_='tourney')
+        ],
+        columns=COLUMNS,
+    )
+
+    def _parse_name(row):
+        team_str = str(row['Team']).strip()
+        for chars in [2, 1]:
+            suffix = team_str[-chars:].strip()
+            if suffix.isdigit() and 1 <= int(suffix) <= 16:
+                row['Seed'] = int(suffix)
+                row['Team'] = team_str[:-chars].strip()
+                return row
+        row['Seed'] = None
+        return row
+
+    df = df.apply(_parse_name, axis=1).dropna(subset=['Seed'])
+    df['Seed']     = df['Seed'].astype(int)
+    df['AdjustEM'] = pd.to_numeric(df['AdjustEM'], errors='coerce')
+    df['AdjustT']  = pd.to_numeric(df['AdjustT'],  errors='coerce')
+    return df[['Seed', 'Team', 'AdjustEM', 'AdjustT']].dropna().reset_index(drop=True)
+
+
+def scrape_torvik(year, gender='womens'):
+    """Scrape tournament teams from barttorvik.com using a headless Firefox browser.
+
+    Requires selenium, beautifulsoup4, and lxml plus geckodriver.
+
+    Parameters
+    ----------
+    year   : int — season year (e.g. 2026)
+    gender : 'womens' uses ncaaw path; 'mens' uses ncaa path
+
+    Returns
+    -------
+    DataFrame with columns: Team (str), Seed (int), pyth (float)
+    """
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.common.by import By
+        from bs4 import BeautifulSoup
+    except ImportError as e:
+        raise ImportError(
+            "Torvik scraping requires selenium and beautifulsoup4. "
+            "pip install selenium beautifulsoup4 lxml  &&  brew install geckodriver"
+        ) from e
+
+    path = 'ncaaw' if gender == 'womens' else 'ncaa'
+    url  = f'https://barttorvik.com/{path}/trank.php?year={year}&conlimit=NCAA'
+
+    opts = webdriver.FirefoxOptions()
+    opts.add_argument('--headless')
+    browser = webdriver.Firefox(options=opts)
+    try:
+        browser.get(url)
+        WebDriverWait(browser, 10).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, 'seedrow'))
+        )
+        soup = BeautifulSoup(browser.page_source, 'lxml')
+    finally:
+        browser.quit()
+
+    raw = pd.DataFrame(
+        [[td.text for td in row.find_all('td')] for row in soup.find_all(class_='seedrow')]
+    ).iloc[:, [1, 7]].rename(columns={7: 'pyth'})
+
+    raw['Team'] = raw[1].str.split('\xa0\xa0\xa0').apply(lambda x: x[0])
+    raw['Seed'] = (
+        raw[1].str.split('\xa0\xa0\xa0')
+        .apply(lambda x: x[1] if len(x) > 1 else None)
+        .str.split(' seed').apply(lambda x: x[0] if x else None)
+    )
+    df = raw[['Team', 'Seed', 'pyth']].copy()
+    df['Seed'] = pd.to_numeric(df['Seed'], errors='coerce')
+    df['pyth'] = pd.to_numeric(df['pyth'], errors='coerce')
+    return df.dropna().assign(Seed=lambda d: d['Seed'].astype(int)).reset_index(drop=True)
+
+
 def scrape_espn_data(id_):
     return requests.get(ESPN_FILE.format(ID=id_)).json()
 

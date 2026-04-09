@@ -24,6 +24,23 @@ ORDER_OF_REGIONS = {  # This changes every year!
 }
 
 
+_BASE_DIR = "/Users/awooddoughty/Library/Mobile Documents/com~apple~CloudDocs/bracket_simple"
+
+
+def get_paths(year, gender):
+    """Return file paths for a given year and gender as a SimpleNamespace."""
+    from types import SimpleNamespace
+    d = f"{_BASE_DIR}/{year}/{gender}"
+    return SimpleNamespace(
+        dir=d,
+        simple=f"{d}/simple_{year}.csv",
+        kenpom=f"{d}/kenpom_{year}.csv",
+        torvik=f"{d}/torvik_{year}.csv",
+        npz=f"{d}/brackets_{year}.npz",
+        parquet=f"{d}/brackets_{year}.parquet",
+    )
+
+
 ESPN_IDS = {
     2025: {
         "mens": 257,
