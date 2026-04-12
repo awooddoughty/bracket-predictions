@@ -138,26 +138,137 @@ def create_bracket(initial_bracket, data, sd_params, k, score_method, sim):
     """
     np.random.seed(sim)
 
-    bracket   = initial_bracket.copy()
-    data      = data.copy()
-    avg_tempo = data.get("AdjustT", np.array([np.nan])).mean()
-    rounds    = ['64', '32', '16', '8', '4', '2', '1']
-    probs     = []
-    bits      = np.uint64(0)
-    bit_pos   = np.uint64(0)
+    n       = len(initial_bracket)
+    rounds  = ['64', '32', '16', '8', '4', '2', '1']
+    probs   = []
+    bits    = np.uint64(0)
+    bit_pos = np.uint64(0)
+
+    # Pre-extract numpy arrays to avoid slow .loc indexing in the hot loop.
+    if score_method == 'kenpom':
+        adj_em    = data['AdjustEM'].values.copy()   # copy: may be updated in-place
+        adj_t     = data['AdjustT'].values
+        avg_tempo = float(adj_t.mean())
+    elif score_method == '538':
+        team_rating = data['team_rating'].values
+    elif score_method == 'torvik':
+        pyth = data['pyth'].values
+
+    # slot[i] = current-round occupant's team name ("" if not yet/no longer competing).
+    # Tracks bracket progress without touching the DataFrame in the read path.
+    slot = initial_bracket['64'].values.copy()
+
+    # Still build the result DataFrame (needed by sequential_predictions / HTML export).
+    bracket = initial_bracket.copy()
 
     for round_ in range(6):
-        gap = 2 ** (round_ + 1)
-        for top_team in range(0, len(bracket), gap):
-            teams = get_teams(top_team, gap, bracket, rounds, round_)
-            winner_num, winner_name, prob = compute_winner(data, teams, sd_params, k, avg_tempo, score_method)
-            probs.append(prob)
-            bracket.loc[winner_num, rounds[round_ + 1]] = winner_name
-            if winner_num == teams[1]:
+        gap       = 2 ** (round_ + 1)
+        next_slot = np.full(n, "", dtype=object)
+
+        for top_team in range(0, n, gap):
+            # Fast numpy scan replaces the per-element bracket.loc reads in get_teams.
+            teams = [t for t in range(top_team, top_team + gap) if slot[t] != ""]
+            A_id, B_id = teams
+
+            # Compute win probability using numpy array access (not data.loc).
+            if score_method == 'kenpom':
+                A_em_v = adj_em[A_id];  A_t_v = adj_t[A_id]
+                B_em_v = adj_em[B_id];  B_t_v = adj_t[B_id]
+                sd   = sd_params[0] + sd_params[1] * ((A_t_v + B_t_v) / 2 - avg_tempo) / avg_tempo
+                prob = norm.cdf((A_em_v - B_em_v) * (A_t_v + B_t_v) / 200, scale=sd)
+            elif score_method == '538':
+                prob = 1 / (1 + 10 ** (-(team_rating[A_id] - team_rating[B_id]) / 400))
+            elif score_method == 'torvik':
+                pA = pyth[A_id];  pB = pyth[B_id]
+                prob = (pA - pA * pB) / (pA + pB - 2 * pA * pB)
+
+            if np.random.uniform() < prob:
+                if score_method == 'kenpom' and k != 0:
+                    adj_em[A_id] = A_em_v + k * (1 - prob)
+                winner_num, winner_name, p = A_id, slot[A_id], prob
+            else:
+                if score_method == 'kenpom' and k != 0:
+                    adj_em[B_id] = B_em_v + k * (1 - prob)
+                winner_num, winner_name, p = B_id, slot[B_id], 1 - prob
                 bits |= (np.uint64(1) << bit_pos)
+
+            probs.append(p)
+            next_slot[winner_num] = winner_name
+            bracket.loc[winner_num, rounds[round_ + 1]] = winner_name
             bit_pos += np.uint64(1)
 
+        slot = next_slot
+
     return f"bracket{sim}", bracket, np.prod(probs), bits
+
+
+def _sim_bits_prob(initial_names, pre_extracted, sd_params, k, score_method, sim):
+    """Lean simulation used by parallel_predictions — skips DataFrame construction.
+
+    Parameters
+    ----------
+    initial_names   : np.ndarray of shape (64,) — team names from initial_bracket['64']
+    pre_extracted   : dict of pre-extracted numpy arrays for the chosen score_method
+    sd_params, k, score_method : same as create_bracket
+
+    Returns
+    -------
+    (bits, prob) — same meaning as the last two values of create_bracket
+    """
+    np.random.seed(sim)
+
+    n       = len(initial_names)
+    probs   = []
+    bits    = np.uint64(0)
+    bit_pos = np.uint64(0)
+
+    if score_method == 'kenpom':
+        adj_em    = pre_extracted['adj_em'].copy()
+        adj_t     = pre_extracted['adj_t']
+        avg_tempo = pre_extracted['avg_tempo']
+    elif score_method == '538':
+        team_rating = pre_extracted['team_rating']
+    elif score_method == 'torvik':
+        pyth = pre_extracted['pyth']
+
+    slot = initial_names.copy()
+
+    for round_ in range(6):
+        gap       = 2 ** (round_ + 1)
+        next_slot = np.full(n, "", dtype=object)
+
+        for top_team in range(0, n, gap):
+            teams  = [t for t in range(top_team, top_team + gap) if slot[t] != ""]
+            A_id, B_id = teams
+
+            if score_method == 'kenpom':
+                A_em_v = adj_em[A_id];  A_t_v = adj_t[A_id]
+                B_em_v = adj_em[B_id];  B_t_v = adj_t[B_id]
+                sd   = sd_params[0] + sd_params[1] * ((A_t_v + B_t_v) / 2 - avg_tempo) / avg_tempo
+                prob = norm.cdf((A_em_v - B_em_v) * (A_t_v + B_t_v) / 200, scale=sd)
+            elif score_method == '538':
+                prob = 1 / (1 + 10 ** (-(team_rating[A_id] - team_rating[B_id]) / 400))
+            elif score_method == 'torvik':
+                pA = pyth[A_id];  pB = pyth[B_id]
+                prob = (pA - pA * pB) / (pA + pB - 2 * pA * pB)
+
+            if np.random.uniform() < prob:
+                if score_method == 'kenpom' and k != 0:
+                    adj_em[A_id] = A_em_v + k * (1 - prob)
+                winner_num, p = A_id, prob
+            else:
+                if score_method == 'kenpom' and k != 0:
+                    adj_em[B_id] = B_em_v + k * (1 - prob)
+                winner_num, p = B_id, 1 - prob
+                bits |= (np.uint64(1) << bit_pos)
+
+            probs.append(p)
+            next_slot[winner_num] = slot[winner_num]
+            bit_pos += np.uint64(1)
+
+        slot = next_slot
+
+    return bits, np.prod(probs)
 
 
 def decode_bracket(bits, initial_bracket):

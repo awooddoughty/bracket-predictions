@@ -2,7 +2,7 @@ import numpy as np
 from multiprocessing import Pool
 from functools import partial
 
-from bracket_sim import create_bracket, create_initial_bracket
+from bracket_sim import create_bracket, create_initial_bracket, _sim_bits_prob
 from bracket_io import save_predictions_npz
 from legacy import JSONEncoder
 
@@ -50,13 +50,27 @@ def parallel_predictions(num_brackets, initial_bracket, data, sd_params, k, scor
 
     Save to disk with save_predictions_npz.
     """
-    pool = Pool(processes=None)
+    # Pre-extract numpy arrays once and share across all workers (read-only in each
+    # worker process — no DataFrame overhead inside the hot loop).
+    initial_names = initial_bracket['64'].values
+    if score_method == 'kenpom':
+        pre_extracted = {
+            'adj_em':    data['AdjustEM'].values.copy(),
+            'adj_t':     data['AdjustT'].values,
+            'avg_tempo': float(data['AdjustT'].values.mean()),
+        }
+    elif score_method == '538':
+        pre_extracted = {'team_rating': data['team_rating'].values}
+    elif score_method == 'torvik':
+        pre_extracted = {'pyth': data['pyth'].values}
+
+    pool    = Pool(processes=None)
     results = pool.map(
-        partial(create_bracket, initial_bracket, data, sd_params, k, score_method),
+        partial(_sim_bits_prob, initial_names, pre_extracted, sd_params, k, score_method),
         range(num_brackets),
     )
 
-    bits_arr  = np.array([r[3] for r in results], dtype=np.uint64)
-    probs_arr = np.array([r[2] for r in results], dtype=np.float64)
+    bits_arr  = np.array([r[0] for r in results], dtype=np.uint64)
+    probs_arr = np.array([r[1] for r in results], dtype=np.float64)
 
     return bits_arr, probs_arr
